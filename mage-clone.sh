@@ -1,66 +1,64 @@
-# Script to clone a Magento site (to a staging site for example)
+# mage-clone
+# https://github.com/hannesbe/mage-clone
+#
+# Shell script to clone a Magento site (to a staging site for example)
 # Requires n98-magerun xmlstarlet bc & pv
 #
-# (c) 2015 - Hannes Van de Vel (https://github.com/hannesbe/mage-clone)
+# The MIT License (MIT)
 #
+# Copyright (c) 2015 Hannes Van de Vel <h@nnes.be>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
-# Script parameters
+# Usage / Help
+VERSION="\e[0;44m$0 v0.1.0\e[0;0m"
+HELP="(c) 2015 - Hannes Van de Vel (https://github.com/hannesbe/mage-clone)
 
-sourcePath="/var/www/html/live"
-clonePath="/var/www/html/stage"
+\e[0;36musage: $0 [-c <config file>] [-h] [-V]\e[0;0m
 
-# Clone Magento secure & unsecure host. Trailing slash required!
-unsecureHost="http://www.stage.shop.com/"
-secureHost="http://www.stage.shop.com/"
+Options:
+-c
+mage-clone config file. Defaults to ./mage-clone.conf
+-h
+Print this help screen
+-V
+Version information\e[0;0m
+"
 
-mysqlArgs="--password=1234 --user=root "
+# Arguments
+while getopts 'c:hV' OPT; do
+	case $OPT in
+		c)  config=$OPTARG;;
+		h)  echo -e "$VERSION"; echo -e "$HELP"; exit 0;;
+		V)  echo -e "$VERSION"; exit 0;;
+		\? ) echo "Unknown option: -$OPTARG" >&2; exit 1;;
+		:  ) echo "Missing option argument for -$OPTARG" >&2; exit 1;;
+		*  ) echo "Unimplemented option: -$OPTARG" >&2; exit 1;;
+	esac
+done
 
-# Optional path to htpasswd file to password protect clone, will be copied to
-# clone path after source sync.
-htpasswd="/var/www/html/.htpasswd"
-
-# Clone database settings. User & db will be created if either doesn't exist
-db="magento_clone"
-dbUser="magento"
-dbPwd="1234"
-
-# Redis cache & session db for clone, optional
-cachedb="3"
-sessiondb="4"
-
-strip="@development"
-# Strip database information from source.
-# Options:
-# @log Log tables
-# @dataflowtemp Temporary tables of the dataflow import/export tool
-# @importexporttemp Temporary tables of the Import/Export module
-# @stripped Standard definition for a stripped dump (logs, sessions, dataflow and importexport)
-# @sales Sales data (orders, invoices, creditmemos etc)
-# @customers Customer data
-# @trade Current trade data (customers and orders). You usally do not want those in developer systems.
-# @search Search related tables (catalogsearch_)
-# @development Removes logs, sessions and trade data so developers do not have to work with real customer data
-# @idx Tables with _idx suffix and index event tables
-
-dummyCustomers=5
-dummyCustomersLocale="en_GB"
-# cs_CZ
-# ru_RU
-# bg_BG
-# en_US
-# it_IT
-# sr_RS
-# sr_Cyrl_RS
-# sr_Latn_RS
-# pl_PL
-# en_GB
-# de_DE
-# sk_SK
-# fr_FR
-# es_AR
-# de_AT
-
-##### Script parameters above
+# Read config
+if [ $config ] ; then
+    source $config
+else
+    source "./mage-clone.conf"
+fi
 
 # Requirements check
 type n98-magerun.phar >/dev/null 2>&1 || { echo -e >&2 "\e[0;41m I require n98-magerun but it's not installed\e[0;0m"; exit 1; }
@@ -100,114 +98,103 @@ echo -e "\n\e[0;44m                          \e[0;0m"
 echo -e   "\e[0;44m  Syncing files to clone  \e[0;0m"
 echo -e   "\e[0;44m                          \e[0;0m\n"
 
-exclude='\
---exclude /media \
---exclude /var/report/ \
---exclude /var/session/ \
---exclude /var/log/ \
---exclude \*.sql \
---exclude \*.zip \'
-rsyncArgs=" -ai --acls --exclude=$exclude --delete --delete-excluded "
+echo -e "\e[0;32mSource path to sync from \e[0;33m"$sourcePath" \e[0;0m"
 
 # Create clone directory
 mkdir -p $clonePath
 
 # Get directory sizes
 sizeSource=`du -bs --exclude=$exclude $sourcePath/ | sed "s/[^0-9]*//g"`
+echo -e "\e[0;32mSource size \e[0;33m"$(bytestohr $sizeSource)" \e[0;0m"
 
-echo -e "\e[0;32m Source size \e[0;33m"$(bytestohr $sizeSource)" \e[0;0m\n"
+# Start sync with progress bar
+echo -e "\e[0;32mSyncing to clone \e[0;33m"$clonePath" \e[0;0m"
 rsync_p $rsyncArgs $sourcePath/ $clonePath/
 
 # Make hardlinks to media so don't use up space
-echo -e "\n\e[0;44m                                   \e[0;0m"
-echo -e   "\e[0;44m  Making clone hardlinks to media  \e[0;0m"
-echo -e   "\e[0;44m                                   \e[0;0m\n"
-
-cp -fvlr $sourcePath/media $clonePath/   > /dev/null
+echo -e "\e[0;32mMaking clone hardlinks to media \e[0;33m"$sourcePath/media"\e[0;0m"
+cp -fvlr $sourcePath/media $clonePath/ > /dev/null
 
 # Copy htpasswd file to clone
 if [ $htpasswd ] ; then
-    echo -e "\n\e[0;44m                             \e[0;0m"
-    echo -e   "\e[0;44m  Copying htpasswd to clone  \e[0;0m"
-    echo -e   "\e[0;44m                             \e[0;0m\n"
-
+    echo -e "\e[0;32mCopying htpasswd \e[0;33m$htpasswd \e[0;32mto clone\e[0;0m"
     cp $htpasswd $clonePath
 fi
 
-# Create db & user if not exists
-echo -e "\n\e[0;44m                                        \e[0;0m"
-echo -e   "\e[0;44m  Create clone db & user if not exists  \e[0;0m"
-echo -e   "\e[0;44m                                        \e[0;0m\n"
-
-echo -e "\e[0;32m Creating db \e[0;33m$db\e[0;32m and user \e[0;33m$dbUser\e[0;32m pwd \e[0;33m$dbPwd\e[0;32m if not exists\e[0;0m"
-mysql $mysqlArgs -e "CREATE DATABASE IF NOT EXISTS $db; GRANT ALL ON $db.* TO '$dbUser'@'localhost' IDENTIFIED BY '$dbPwd'; FLUSH PRIVILEGES;"
-
 # Dump source database
-echo -e "\n\e[0;44m                     \e[0;0m"
-echo -e   "\e[0;44m  Dumping source db  \e[0;0m"
-echo -e   "\e[0;44m                     \e[0;0m\n"
+echo -e "\n\e[0;44m                             \e[0;0m"
+echo -e   "\e[0;44m  Copying database to clone  \e[0;0m"
+echo -e   "\e[0;44m                             \e[0;0m\n"
 
 cd $sourcePath
 dbSource=`n98-magerun.phar db:info dbname`
-echo -e "\e[0;32m Dumping source db \e[0;33m"$dbSource"\e[0;0m"
+echo -e "\e[0;32mDumping source db \e[0;33m"$dbSource"\e[0;0m"
 
 dbSize=$(mysql $mysqlArgs -se "SELECT Round(Sum(data_length + index_length), 0)
 FROM  information_schema.tables WHERE table_schema = '$dbSource';")
-echo -e "\e[0;32m Estimated db size (without strips) \e[0;33m"$(bytestohr $dbSize)"\e[0;0m"
+echo -e "\e[0;32mEstimated db size (unstripped) \e[0;33m"$(bytestohr $dbSize)"\e[0;0m"
 
 if [ $strip ] ; then
-    echo -e "\e[0;32m Stripping data \e[0;33m"$strip"\e[0;0m"
+    echo -e "\e[0;32mStripping data \e[0;33m"$strip"\e[0;0m"
 fi
 
-echo -e "\n"
 n98-magerun.phar db:dump --strip="$strip" --stdout  | pv -s $dbSize > $clonePath/$dbSource-clone.sql
 
+# Create db & user if not exists
+echo -e "\e[0;32mCreating db \e[0;33m$db\e[0;32m and user \e[0;33m$dbUser\e[0;32m pwd \e[0;33m$dbPwd\e[0;32m if not exists\e[0;0m"
+mysql $mysqlArgs -e "CREATE DATABASE IF NOT EXISTS $db; GRANT ALL ON $db.* TO '$dbUser'@'localhost' IDENTIFIED BY '$dbPwd'; FLUSH PRIVILEGES;"
+
 # Restore dump to clone db
-echo -e "\n\e[0;44m                              \e[0;0m"
-echo -e   "\e[0;44m  Restoring dump to clone db  \e[0;0m"
-echo -e   "\e[0;44m                              \e[0;0m\n"
-
-echo -e "\e[0;32m Retoring dump \e[0;33m"$clonePath/$dbSource-clone.sql"\e[0;0m"
-echo -e "\e[0;32m To clone database \e[0;33m"$db"\e[0;0m"
-
-echo -e "\n"
+echo -e "\e[0;32mRestoring dump \e[0;33m"$clonePath/$dbSource-clone.sql"\e[0;0m"
+echo -e "\e[0;32mto clone database \e[0;33m"$db"\e[0;0m"
 pv $clonePath/$dbSource-clone.sql | mysql $mysqlArgs $db
 
 # Update clone app/etc/local.xml with clone db credentials & redis db database numbers
-echo -e "\n\e[0;44m                                    \e[0;0m"
-echo -e   "\e[0;44m  Updating clone db / cache config  \e[0;0m"
-echo -e   "\e[0;44m                                    \e[0;0m\n"
+echo -e "\n\e[0;44m                         \e[0;0m"
+echo -e   "\e[0;44m  Updating clone config  \e[0;0m"
+echo -e   "\e[0;44m                         \e[0;0m\n"
 cd $clonePath
 xmlstarlet edit -L -u "/config/global/resources/default_setup/connection/username" -v "$dbUser" app/etc/local.xml
+echo -e "\e[0;32mUpdated db user to \e[0;33m"$dbUser"\e[0;0m"
 xmlstarlet edit -L -u "/config/global/resources/default_setup/connection/password" -v "$dbPwd" app/etc/local.xml
+echo -e "\e[0;32mUpdated db password to \e[0;33m"$dbPwd"\e[0;0m"
 xmlstarlet edit -L -u "/config/global/resources/default_setup/connection/dbname" -v "$db" app/etc/local.xml
-xmlstarlet edit -L -u "/config/global/cache/backend_options/database" -v "$cachedb" app/etc/local.xml
-xmlstarlet edit -L -u "/config/global/redis_session/db" -v "$sessiondb" app/etc/local.xml
-
-if [ $dummyCustomers > 0 ] ; then
-
+echo -e "\e[0;32mUpdated db name to \e[0;33m"$db"\e[0;0m"
+if [ $cachedb ] ; then
+    xmlstarlet edit -L -u "/config/global/cache/backend_options/database" -v "$cachedb" app/etc/local.xml
+    echo -e "\e[0;32mUpdated cache db to \e[0;33m"$cachedb"\e[0;0m"
+fi
+if [ $sessiondb ] ; then
+    xmlstarlet edit -L -u "/config/global/redis_session/db" -v "$sessiondb" app/etc/local.xml
+    echo -e "\e[0;32mUpdated session db to \e[0;33m"$sessiondb"\e[0;0m"
+fi
 
 # Change clone base URLs
-echo -e "\e[0;32m Updating clone base URLs \e[0;0m"
+echo -e "\e[0;32mUpdating clone base URLs\e[0;0m"
 n98-magerun.phar config:set web/unsecure/base_url $unsecureHost
 n98-magerun.phar config:set web/secure/base_url $secureHost
 
+echo -e "\e[0;32mUpdating clone cookie domain\e[0;0m"
+n98-magerun.phar config:set web/cookie/cookie_domain $cookieDomain
+
 # Create dummy customers
 if [ $dummyCustomers > 0 ] ; then
-    echo " "
-    echo -e "\e[0;32m Creating \e[0;33m"$dummyCustomers"\e[0;32m dummy customers in \e[0;33m"$dummyCustomersLocale"\e[0;0m"
+    echo -e "\n\e[0;44m                       \e[0;0m"
+    echo -e   "\e[0;44m  Creating dummy data  \e[0;0m"
+    echo -e   "\e[0;44m                       \e[0;0m\n"
+    echo -e "\e[0;32mCreating \e[0;33m"$dummyCustomers"\e[0;32m dummy customers locale \e[0;33m"$dummyCustomersLocale"\e[0;0m"
     n98-magerun.phar customer:create:dummy --with-addresses $dummyCustomers $dummyCustomersLocale
 fi
 
 # Flush clone cache
-echo -e "\n\e[0;44m                       \e[0;0m"
-echo -e   "\e[0;44m  Flushing clone cache \e[0;0m"
-echo -e   "\e[0;44m                       \e[0;0m\n"
+echo -e "\n\e[0;44m                        \e[0;0m"
+echo -e   "\e[0;44m  Flushing clone cache  \e[0;0m"
+echo -e   "\e[0;44m                        \e[0;0m\n"
 n98-magerun.phar cache:flush
 
 # Show clone address
-echo -e "\n\e[0;45m                 \e[0;0m"
-echo -e   "\e[0;45m  Clone is ready \e[0;0m"
-echo -e   "\e[0;45m                 \e[0;0m\n"
+echo -e "\n\e[0;42m                  \e[0;0m"
+echo -e   "\e[0;42m  Clone is ready  \e[0;0m"
+echo -e   "\e[0;42m                  \e[0;0m\n"
 echo -e "\e[0;32mClone ready at \e[0;33m"$unsecureHost"\e[0;0m"
 echo -e "\e[0;32mDon't forget to configure Apache or nginx. Clone path is \e[0;33m"$clonePath"\e[0;0m"

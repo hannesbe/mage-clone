@@ -14,16 +14,37 @@ Shell script to easily create a clone from a Magento site for staging, testing o
 - Progress bars for each step, especially useful for larger shops.
 - Optionally create dummy customer data on clone.
 
+## Installation
+Clone this repo somewhere on your Magento server.
+```
+git clone https://github.com/hannesbe/mage-clone.git
+```
+
+Set execute permissions
+```
+chmod o+x mage-clone.sh
+```
+
+## Usage
+Edit `mage-clone.conf` and enter your parameters and run `./mage-clone.sh` to start the clone.
+
+You can reference another config file if you want.
+```
+./mage-clone.sh -c ./mage-clone-stage.conf
+```
+
 ## Requirements
-Requires n98-magerun xmlstarlet bc & pv.
+### n98-magerun
+
+Follow [Magerun installation instructions](http://magerun.net/installation).
+
+Make sure to copy `n98-magerun.phar` to `/usr/local/bin/` for example, the script expects it to be in your path.
+
+### xmlstarlet bc & pv.
 On CentOS / RHEL based OS use
 ```
 yum install xmlstarlet bc pv
 ```
-
-For n98-magerun follow [Magerun installation instructions](http://magerun.net/installation).
-
-Make sure to copy `n98-magerun.phar` to `/usr/local/bin/` for example, the script expects it to be in your path.
 
 ## Known issues / limitations
 

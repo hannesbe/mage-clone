@@ -14,6 +14,8 @@ Shell script to easily create a clone from a Magento site for staging, testing o
 - Progress bars for each step, especially useful for larger shops.
 - Optionally create dummy customer data on clone.
 
+![](http://i.imgur.com/rnpdPv7.gif)
+
 ## Installation
 Clone this repo somewhere on your Magento server.
 ```

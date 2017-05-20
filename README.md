@@ -22,7 +22,7 @@ Clone this repo somewhere on your Magento server.
 git clone https://github.com/hannesbe/mage-clone.git
 ```
 
-Set execute permissions
+Set execute permissions (already done when using git clone)
 ```
 chmod o+x mage-clone.sh
 ```

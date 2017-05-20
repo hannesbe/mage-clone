@@ -88,8 +88,11 @@ bytestohr()
 function rsync_p {
     # rsync with progressbar
     #
-    set -e
+
     l=`rsync "$@" -n --out-format='%n' | wc -l`
+    echo $l
+
+    set -e
     rsync "$@" --out-format='%n' | pv -lpte -s $l > /dev/null
 }
 
@@ -127,18 +130,17 @@ echo -e   "\e[0;44m  Copying database to clone  \e[0;0m"
 echo -e   "\e[0;44m                             \e[0;0m\n"
 
 cd $sourcePath
-dbSource=`n98-magerun.phar db:info dbname`
+dbSource=`n98-magerun.phar --skip-root-check db:info dbname`
 echo -e "\e[0;32mDumping source db \e[0;33m"$dbSource"\e[0;0m"
 
-dbSize=$(mysql $mysqlArgs -se "SELECT Round(Sum(data_length + index_length), 0)
-FROM  information_schema.tables WHERE table_schema = '$dbSource';")
+dbSize=$(mysql $mysqlArgs -se "SELECT Round(Sum(data_length + index_length), 0) FROM  information_schema.tables WHERE table_schema = '$dbSource';")
 echo -e "\e[0;32mEstimated db size (unstripped) \e[0;33m"$(bytestohr $dbSize)"\e[0;0m"
 
 if [ $strip ] ; then
     echo -e "\e[0;32mStripping data \e[0;33m"$strip"\e[0;0m"
 fi
 
-n98-magerun.phar db:dump --strip="$strip" --stdout  | pv -s $dbSize > $clonePath/$dbSource-clone.sql
+n98-magerun.phar --skip-root-check db:dump --strip="$strip" --stdout  | pv -s $dbSize > $clonePath/$dbSource-clone.sql
 
 # Create db & user if not exists
 echo -e "\e[0;32mCreating db \e[0;33m$db\e[0;32m and user \e[0;33m$dbUser\e[0;32m pwd \e[0;33m$dbPwd\e[0;32m if not exists\e[0;0m"
@@ -171,11 +173,11 @@ fi
 
 # Change clone base URLs
 echo -e "\e[0;32mUpdating clone base URLs\e[0;0m"
-n98-magerun.phar config:set web/unsecure/base_url $unsecureHost
-n98-magerun.phar config:set web/secure/base_url $secureHost
+n98-magerun.phar --skip-root-check config:set web/unsecure/base_url $unsecureHost
+n98-magerun.phar --skip-root-check config:set web/secure/base_url $secureHost
 
 echo -e "\e[0;32mUpdating clone cookie domain\e[0;0m"
-n98-magerun.phar config:set web/cookie/cookie_domain $cookieDomain
+n98-magerun.phar --skip-root-check config:set web/cookie/cookie_domain $cookieDomain
 
 # Create dummy customers
 if [ $dummyCustomers > 0 ] ; then
@@ -183,14 +185,14 @@ if [ $dummyCustomers > 0 ] ; then
     echo -e   "\e[0;44m  Creating dummy data  \e[0;0m"
     echo -e   "\e[0;44m                       \e[0;0m\n"
     echo -e "\e[0;32mCreating \e[0;33m"$dummyCustomers"\e[0;32m dummy customers locale \e[0;33m"$dummyCustomersLocale"\e[0;0m"
-    n98-magerun.phar customer:create:dummy --with-addresses $dummyCustomers $dummyCustomersLocale
+    n98-magerun.phar --skip-root-check customer:create:dummy --with-addresses $dummyCustomers $dummyCustomersLocale
 fi
 
 # Flush clone cache
 echo -e "\n\e[0;44m                        \e[0;0m"
 echo -e   "\e[0;44m  Flushing clone cache  \e[0;0m"
 echo -e   "\e[0;44m                        \e[0;0m\n"
-n98-magerun.phar cache:flush
+n98-magerun.phar --skip-root-check cache:flush
 
 # Show clone address
 echo -e "\n\e[0;42m                  \e[0;0m"
